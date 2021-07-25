@@ -1,16 +1,27 @@
 -module(pathfinding_test).
 
 %% API
--export([gen_mazes/4, test/1, draw_maze/2]).
+-export([gen_mazes/4, test/1, draw_maze/2, t/0]).
 
-gen_mazes(MazeMod, Width, Col, Times) ->
-    Mazes = [MazeMod:create_maze(Width, Col) || _ <- lists:seq(1, Times)],
-    file:write_file("mazes.data", term_to_binary(Mazes)).
+gen_mazes(MazeMod, Width, High, Times) ->
+    Mazes = [MazeMod:create_maze(Width, High) || _ <- lists:seq(1, Times)],
+    Str = io_lib:format("{mazes,~w}.", [Mazes]),
+    Str1 = string:replace(Str, <<"},">>, <<"},\n">>, all),
+    file:write_file("mazes.data", Str1).
 
 test(Fun) ->
-    {ok, Data} = file:read_file("mazes.data"),
-    Mazes = binary_to_term(Data),
+    {ok, Data} = file:consult("mazes.data"),
+    Mazes = proplists:get_value(mazes, Data, []),
     tc:t(lists, foreach, [Fun, Mazes], 1).
+
+t() ->
+    {ok, Data} = file:consult("mazes.data"),
+    [Maze] = proplists:get_value(mazes, Data, []),
+    Width = size(element(1, Maze)),
+    High = size(Maze),
+    Fun = fun(X, Y) -> element(X, element(Y, Maze)) =:= 0 end,
+    [io:format("this.setWalkableAt(~w, ~w, false);~n", [X-1, Y-1]) || X <- lists:seq(1, Width), Y <- lists:seq(1, High), Fun(X, Y)].
+
 
 draw_maze(Path, Maze) ->
     Width = size(element(1, Maze)),

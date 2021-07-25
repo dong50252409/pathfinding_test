@@ -1,4 +1,4 @@
--module(jps_tests).
+-module(jps_test).
 
 %% API
 -export([test/1]).
@@ -18,6 +18,6 @@ test(Options) ->
             _Other ->
                 FullPath = []
         end,
-        proplists:get_value(is_output, Options, false) andalso pathfinding_test:draw_maze(FullPath, Maze)
+        proplists:get_value(output, Options, false) andalso spawn(pathfinding_test, draw_maze, [FullPath, Maze])
     end.
 
