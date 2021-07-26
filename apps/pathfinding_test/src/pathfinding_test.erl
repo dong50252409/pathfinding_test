@@ -1,7 +1,7 @@
 -module(pathfinding_test).
 
 %% API
--export([gen_mazes/4, test/1, draw_maze/2, t/0]).
+-export([gen_mazes/4, test/1, test/2]).
 
 gen_mazes(MazeMod, Width, High, Times) ->
     Mazes = [MazeMod:create_maze(Width, High) || _ <- lists:seq(1, Times)],
@@ -9,27 +9,32 @@ gen_mazes(MazeMod, Width, High, Times) ->
     Str1 = string:replace(Str, <<"},">>, <<"},\n">>, all),
     file:write_file("mazes.data", Str1).
 
-test(Fun) ->
+test(PFFun) ->
+    test(PFFun, false).
+test(PFFun, IsOutput) ->
+    {module, Mod} = erlang:fun_info(PFFun, module),
+    Fun =
+        fun(Maze, {AccFullPath, Num}) ->
+            FullPath = PFFun(Maze),
+            case IsOutput of
+                true ->
+                    draw_maze(Num, atom_to_list(Mod) ++ ".output", FullPath, Maze);
+                false ->
+                    ok
+            end,
+            {[{Num, FullPath} | AccFullPath], Num + 1}
+        end,
     {ok, Data} = file:consult("mazes.data"),
     Mazes = proplists:get_value(mazes, Data, []),
-    tc:t(lists, foreach, [Fun, Mazes], 1).
+    tc:t(lists, foldr, [Fun, {[], 1}, Mazes], 1).
 
-t() ->
-    {ok, Data} = file:consult("mazes.data"),
-    [Maze] = proplists:get_value(mazes, Data, []),
+draw_maze(Num, Filename, Path, Maze) ->
     Width = size(element(1, Maze)),
-    High = size(Maze),
-    Fun = fun(X, Y) -> element(X, element(Y, Maze)) =:= 0 end,
-    [io:format("this.setWalkableAt(~w, ~w, false);~n", [X-1, Y-1]) || X <- lists:seq(1, Width), Y <- lists:seq(1, High), Fun(X, Y)].
-
-
-draw_maze(Path, Maze) ->
-    Width = size(element(1, Maze)),
-    {ok, IO} = file:open("draw_mazes.out", [write]),
+    {ok, IO} = file:open(Filename, [append]),
     Maze1 = draw_maze_path(Path, Maze),
     Border = io_lib:format("~s~n", [lists:duplicate(Width + 2, $X)]),
     Str = draw_maze(tuple_to_list(Maze1)),
-    io:format(IO, "~s~n", [[Border, Str, Border]]),
+    io:format(IO, "Num:~w Len:~w~n ~s~n", [Num, length(Path), [Border, Str, Border]]),
     file:close(IO).
 
 draw_maze([Width | T]) ->

@@ -15,7 +15,6 @@ test(Options) ->
             {max, FullPath} ->
                 FullPath;
             _Other ->
-                FullPath = []
-        end,
-        proplists:get_value(output, Options, false) andalso spawn(pathfinding_test, draw_maze, [FullPath, Maze])
+                []
+        end
     end.

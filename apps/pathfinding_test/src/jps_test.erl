@@ -14,10 +14,10 @@ test(Options) ->
             end,
         case jps:search({1, 1}, {Width, High}, ValidFun, Options) of
             {jump_points, Path} ->
-                {full_path, FullPath} = jps:get_full_path(Path);
+                {full_path, FullPath} = jps:get_full_path(Path),
+                FullPath;
             _Other ->
-                FullPath = []
-        end,
-        proplists:get_value(output, Options, false) andalso spawn(pathfinding_test, draw_maze, [FullPath, Maze])
+                []
+        end
     end.
 
