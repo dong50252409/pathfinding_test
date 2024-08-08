@@ -1,7 +1,7 @@
 -module(gbfs_test).
 
 %% API
--export([test/1, test_2/1, test_3/1]).
+-export([test/1, test_fast/1]).
 
 test(Options) ->
     fun(Maze) ->
