@@ -1,68 +1,58 @@
 -module(pathfinding_test).
 
-
-%% TEST_API
--export([t1/5]).
-
 %% API
--export([gen_mazes/4, test/3, test/6, test/5]).
+-export([gen_mazes/4, benchmark/2, benchmark/3, visual_run/2]).
 
-t1(MazeMod, Multi, Width, High, Times) when Times > 0 ->
-    test(MazeMod, Width, High, 10, 10, false),
-    t1(MazeMod, Multi, Width * Multi, High * Multi, Times - 1);
-t1(MazeMod, Multi, Width, High, Times) ->
-    t1(MazeMod, Multi, Width, High, Times - 1).
-
+%% @doc 生成迷宫
 gen_mazes(MazeMod, Width, High, Times) ->
-    Mazes = [MazeMod:create_maze(Width, High) || _ <- lists:seq(1, Times)],
+    Pid = self(),
+    PidList = [spawn(fun() -> Pid ! {self(), MazeMod:create_maze(Width, High)} end) || _ <- lists:seq(1, Times)],
+    Mazes = gen_mazes_1(PidList),
     Str = io_lib:format("~w.", [Mazes]),
     Str1 = string:replace(Str, <<"},">>, <<"},\n">>, all),
-    file:write_file(io_lib:format("~w.data", [MazeMod]), Str1).
+    Filename = io_lib:format("~w.data", [MazeMod]),
+    file:write_file(Filename, Str1).
 
-test(Filename, Times, IsOutput) when is_list(Filename);is_binary(Filename) ->
+gen_mazes_1([]) ->
+    [];
+gen_mazes_1(PidList) ->
+    receive
+        {Pid, Maze} ->
+            [Maze | gen_mazes_1(lists:delete(Pid, PidList))]
+    end.
+
+%% @doc 运行测试
+benchmark(Filename, FunList) when is_list(Filename);is_binary(Filename) ->
+    benchmark(Filename, FunList, 10).
+benchmark(Filename, FunList, Times) when is_list(Filename);is_binary(Filename) ->
     {ok, [Mazes]} = file:consult(Filename),
-    Width = size(element(1, hd(Mazes))),
-    High = size(hd(Mazes)),
-    Mazes1 = lists:zip(lists:seq(1, length(Mazes)), Mazes),
-    test(Mazes1, Width, High, Times, IsOutput).
+    lists:foreach(fun(Fun) -> tc:t(lists, foreach, [fun(Maze) -> Fun(Maze) end, Mazes], Times) end, FunList).
 
-test(MazeMod, Width, High, Num, Times, IsOutput) when is_atom(MazeMod) ->
-    Mazes = [{N, MazeMod:create_maze(Width, High)} || N <- lists:seq(1, Num)],
-    test(Mazes, Width, High, Times, IsOutput).
-
-test(Mazes, Width, High, Times, IsOutput) ->
-    JPSFun = jps_test:test([{max_limit, 16#FFFFFFFF}]),
-    Fun1 =
+%% @doc 运行寻路算法，并生成可视化结果
+visual_run(Filename, FunList) ->
+    {ok, [Mazes]} = file:consult(Filename),
+    Width = size(erlang:element(1, hd(Mazes))),
+    High = erlang:size(erlang:hd(Mazes)),
+    lists:foreach(
         fun({N, Maze}) ->
-            FullPath = JPSFun(Maze),
-            try_output("jps.output", N, FullPath, Maze, IsOutput)
-        end,
+            lists:foreach(
+                fun(Fun) ->
+                    FullPath = Fun(Maze),
+                    {_, Mod} = erlang:fun_info(Fun, module),
+                    OutFilename = io_lib:format("~w.output",[Mod]),
+                    draw_maze(N, Maze, FullPath, OutFilename),
+                    io:format("Mod:~w N:~w Width:~w, High:~w~n", [Mod, N, Width, High])
+                end, FunList)
+        end, lists:enumerate(Mazes)).
 
-    io:format("JPS Width:~w, High:~wn", [Width, High]),
-    tc:t(lists, foreach, [Fun1, Mazes], Times),
 
-    AStarFun = astar_test:test([{max_limit, 16#FFFFFFFF}]),
-    Fun2 =
-        fun({N, Maze}) ->
-            FullPath = AStarFun(Maze),
-            try_output("astar.output", N, FullPath, Maze, IsOutput)
-        end,
-
-    io:format("AStar Width:~w, High:~wn", [Width, High]),
-    tc:t(lists, foreach, [Fun2, Mazes], Times).
-
-try_output(Filename, Num, FullPath, Maze, true) ->
-    draw_maze(Num, Filename, FullPath, Maze);
-try_output(_Filename, _Num, _FullPath, _Maze, false) ->
-    ok.
-
-draw_maze(Num, Filename, Path, Maze) ->
+draw_maze(Num, Maze, Path, Filename) ->
     Width = size(element(1, Maze)),
     {ok, IO} = file:open(Filename, [append]),
     Maze1 = draw_maze_path(Path, Maze),
     Border = io_lib:format("~s~n", [lists:duplicate(Width + 2, $X)]),
     Str = draw_maze(tuple_to_list(Maze1)),
-    io:format(IO, "Num:~w Len:~w~n ~s~n", [Num, length(Path), [Border, Str, Border]]),
+    io:format(IO, "Num:~w Len:~w~n~s~n", [Num, length(Path), [Border, Str, Border]]),
     file:close(IO).
 
 draw_maze([Width | T]) ->
