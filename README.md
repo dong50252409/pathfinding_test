@@ -15,8 +15,14 @@ pathfinding_test
     F3 = gbfs_test:test([]).
     %% 生成一个迷宫地图
     %% 100 X 100 200 X 200 400 X 400 800 X 800种尺寸
-    pathfinding_test:gen_maze(island_maze, 100, 100, 1),
+    pathfinding_test:gen_mazes(island_maze, 100, 100, 1). 
+
+    %% 跑测试
     pathfinding_test:benchmark("island_maze.data", [F1, F2, F3]).
+    pathfinding_test:benchmark("island_maze.data", [F1, F2, F3], 1000).
+
+    %% 生成可视化地图
+    pathfinding_test:visual_run("island_maze.data", [F1, F2, F3]).
 
 生成迷宫地图图片
 ----
