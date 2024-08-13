@@ -1,6 +1,0 @@
--sname pathfinding_test
-
--setcookie pathfinding_test_cookie
-
-+K true
-+A30
