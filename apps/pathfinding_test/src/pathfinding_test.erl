@@ -23,10 +23,12 @@ gen_mazes_1(PidList) ->
 
 %% @doc 运行测试
 benchmark(Filename, FunList) when is_list(Filename);is_binary(Filename) ->
-    benchmark(Filename, FunList, 10).
-benchmark(Filename, FunList, Times) when is_list(Filename);is_binary(Filename) ->
+    benchmark(Filename, FunList, #{}).
+benchmark(Filename, FunList, RunOptions) when is_list(Filename);is_binary(Filename) ->
     {ok, [Mazes]} = file:consult(Filename),
-    lists:foreach(fun(Fun) -> tc:t(lists, foreach, [fun(Maze) -> Fun(Maze) end, Mazes], Times) end, FunList).
+    Codes = [fun() -> Fun(Mazes) end || Fun <- FunList],
+    Reports = erlperf:compare(Codes, RunOptions#{report => full}),
+    io:format("~s~n", [erlperf_cli:format(Reports, #{viewport_width => 120, format => basic})]).
 
 %% @doc 运行寻路算法，并生成可视化结果
 visual_run(Filename, FunList) ->
