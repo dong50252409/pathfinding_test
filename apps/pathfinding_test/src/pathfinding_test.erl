@@ -1,12 +1,21 @@
 -module(pathfinding_test).
 
 %% API
--export([gen_mazes/4, gen_test_fun/3, benchmark/2, benchmark/3, visual_run/2]).
+-export([
+    gen_mazes/4,
+    get_maze_info/1,
+    gen_test_fun/2, gen_test_fun/3,
+    benchmark/2, benchmark/3,
+    visual_run/2
+]).
 
 %% @doc 生成迷宫
 gen_mazes(MazeMod, Width, High, Times) ->
     Pid = self(),
-    PidList = [spawn(fun() -> Pid ! {self(), MazeMod:create_maze(Width, High)} end) || _ <- lists:seq(1, Times)],
+    PidList = [
+        spawn(fun() -> Pid ! {self(), MazeMod:create_maze(Width, High)} end)
+     || _ <- lists:seq(1, Times)
+    ],
     Mazes = gen_mazes_1(PidList),
     Str = io_lib:format("~w.", [Mazes]),
     Str1 = string:replace(Str, <<"},">>, <<"},\n">>, all),
@@ -21,36 +30,69 @@ gen_mazes_1(PidList) ->
             [Maze | gen_mazes_1(lists:delete(Pid, PidList))]
     end.
 
+%% @doc 获取迷宫信息
+get_maze_info(Maze) ->
+    Width = size(erlang:element(1, Maze)),
+    High = size(Maze),
+    ValidFun = fun({X, Y}) ->
+        X > 0 andalso X =< Width andalso Y > 0 andalso Y =< High andalso
+            erlang:element(X, erlang:element(Y, Maze)) =/= 0
+    end,
+    {Width, High, ValidFun}.
+
+%% @doc 生成测试函数
+gen_test_fun(F, Options) ->
+    fun(Maze) ->
+        {Width, High, ValidFun} = get_maze_info(Maze),
+        StartPos = proplists:get_value(start_pos, Options, {3, 3}),
+        EndPos = proplists:get_value(end_pos, Options, {Width - 3, High - 3}),
+        case erlang:apply(F, [StartPos, EndPos, ValidFun, Options]) of
+            {ok, FullPath} ->
+                FullPath;
+            _Other ->
+                io:format("Pathfinding Failed Reason:~w~n", [_Other]),
+                []
+        end
+    end.
+
 %% @doc 生成测试函数
 gen_test_fun(M, F, Options) ->
-    fun(Mazes) ->
-        lists:foreach(
-            fun(Maze) ->
-                Width = size(element(1, Maze)),
-                High = size(Maze),
-                StartPos = proplists:get_value(start_pos, Options, {3, 3}),
-                EndPos = proplists:get_value(end_pos, Options, {Width - 3, High - 3}),
-                ValidFun = 
-                    fun({X, Y}) -> 
-                        X > 0 andalso X =< Width andalso Y > 0 andalso Y =< High 
-                        andalso element(X, element(Y, Maze)) =/= 0 
-                    end,
-                case erlang:apply(M, F, [StartPos, EndPos, ValidFun, Options]) of
-                    {ok, FullPath} -> FullPath;
-                    _Other ->
-                        io:format("Pathfinding Failed Reason:~w~n", [_Other]),
-                        []
-                end
-            end, Mazes)
+    fun(Maze) ->
+        {Width, High, ValidFun} = get_maze_info(Maze),
+        StartPos = proplists:get_value(start_pos, Options, {3, 3}),
+        EndPos = proplists:get_value(end_pos, Options, {Width - 3, High - 3}),
+        case erlang:apply(M, F, [StartPos, EndPos, ValidFun, Options]) of
+            {ok, FullPath} ->
+                FullPath;
+            _Other ->
+                io:format("Pathfinding Failed Reason:~w~n", [_Other]),
+                []
+        end
     end.
 
 %% @doc 运行测试
-benchmark(Filename, FunList) when is_list(Filename);is_binary(Filename) ->
+benchmark(Filename, FunList) when is_list(Filename); is_binary(Filename) ->
     benchmark(Filename, FunList, #{}).
-benchmark(Filename, FunList, RunOptions) when is_list(Filename);is_binary(Filename) ->
+benchmark(Filename, FunList, RunOptions) when is_list(Filename); is_binary(Filename) ->
     {ok, [Mazes]} = file:consult(Filename),
-    Codes = [fun() -> Fun(Mazes) end || Fun <- FunList],
-    Reports = erlperf:compare(Codes, RunOptions#{report => full}),
+    Codes = [
+        #{
+            runner => fun(L) -> lists:foreach(Fun, L) end,
+            init_runner => fun() -> Mazes end
+        }
+     || Fun <- FunList
+    ],
+    Reports = [
+        begin
+            {_, [F1]} = erlang:fun_info(F, env),
+            Report#{
+                code := #{
+                    runner => io_lib:format("~w", [(erlang:element(2, erlang:fun_info(F1, env)))])
+                }
+            }
+        end
+     || #{code := #{runner := F}} = Report <- erlperf:compare(Codes, RunOptions#{report => full})
+    ],
     io:format("~s~n", [erlperf_cli:format(Reports, #{viewport_width => 120, format => basic})]).
 
 %% @doc 运行寻路算法，并生成可视化结果
@@ -64,12 +106,15 @@ visual_run(Filename, FunList) ->
                 fun(Fun) ->
                     FullPath = Fun(Maze),
                     {_, Mod} = erlang:fun_info(Fun, module),
-                    OutFilename = io_lib:format("~w.output",[Mod]),
+                    OutFilename = io_lib:format("~w.output", [Mod]),
                     draw_maze(N, Maze, FullPath, OutFilename),
                     io:format("Mod:~w N:~w Width:~w, High:~w~n", [Mod, N, Width, High])
-                end, FunList)
-        end, lists:enumerate(Mazes)).
-
+                end,
+                FunList
+            )
+        end,
+        lists:enumerate(Mazes)
+    ).
 
 draw_maze(Num, Maze, Path, Filename) ->
     Width = size(element(1, Maze)),
