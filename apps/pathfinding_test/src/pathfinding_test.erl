@@ -26,10 +26,10 @@ gen_test_fun(M, F, Options) ->
     fun(Mazes) ->
         lists:foreach(
             fun(Maze) ->
-                StartPos = proplists:get_value(start_pos, Options, {3, 3}),
-                EndPos = proplists:get_value(end_pos, Options, {Width - 3, High - 3}),
                 Width = size(element(1, Maze)),
                 High = size(Maze),
+                StartPos = proplists:get_value(start_pos, Options, {3, 3}),
+                EndPos = proplists:get_value(end_pos, Options, {Width - 3, High - 3}),
                 ValidFun = 
                     fun({X, Y}) -> 
                         X > 0 andalso X =< Width andalso Y > 0 andalso Y =< High 
@@ -42,7 +42,7 @@ gen_test_fun(M, F, Options) ->
                         []
                 end
             end, Mazes)
-    end
+    end.
 
 %% @doc 运行测试
 benchmark(Filename, FunList) when is_list(Filename);is_binary(Filename) ->
