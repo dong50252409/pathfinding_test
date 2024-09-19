@@ -1,7 +1,7 @@
 -module(pathfinding_test).
 
 %% API
--export([gen_mazes/4, benchmark/2, benchmark/3, visual_run/2]).
+-export([gen_mazes/4, gen_test_fun/3, benchmark/2, benchmark/3, visual_run/2]).
 
 %% @doc 生成迷宫
 gen_mazes(MazeMod, Width, High, Times) ->
@@ -20,6 +20,29 @@ gen_mazes_1(PidList) ->
         {Pid, Maze} ->
             [Maze | gen_mazes_1(lists:delete(Pid, PidList))]
     end.
+
+%% @doc 生成测试函数
+gen_test_fun(M, F, Options) ->
+    fun(Mazes) ->
+        lists:foreach(
+            fun(Maze) ->
+                StartPos = proplists:get_value(start_pos, Options, {3, 3}),
+                EndPos = proplists:get_value(end_pos, Options, {Width - 3, High - 3}),
+                Width = size(element(1, Maze)),
+                High = size(Maze),
+                ValidFun = 
+                    fun({X, Y}) -> 
+                        X > 0 andalso X =< Width andalso Y > 0 andalso Y =< High 
+                        andalso element(X, element(Y, Maze)) =/= 0 
+                    end,
+                case erlang:apply(M, F, [StartPos, EndPos, ValidFun, Options]) of
+                    {ok, FullPath} -> FullPath;
+                    _Other ->
+                        io:format("Pathfinding Failed Reason:~w~n", [_Other]),
+                        []
+                end
+            end, Mazes)
+    end
 
 %% @doc 运行测试
 benchmark(Filename, FunList) when is_list(Filename);is_binary(Filename) ->
